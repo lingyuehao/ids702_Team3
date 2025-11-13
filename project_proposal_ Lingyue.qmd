@@ -1,0 +1,120 @@
+---
+title: "Project Proposal"
+author: "ALL group member names here"
+subtitle: "Due November 16 at 11:59pm"
+format: pdf
+editor: visual
+---
+
+#### Load Packages
+
+```{r load-packages, message = FALSE, warning = FALSE}
+library(tidyverse)
+```
+
+# Dataset 1 (top choice)
+
+**Data source:**
+
+The dataset was manually downloaded from the U.S. Department of Transportation’s Bureau of Transportation Statistics (BTS) On-Time Performance delay-cause database (<https://www.transtats.bts.gov/OT_Delay/OT_DelayCause1.asp?20=E>). During the download process, I selected All Carriers and specified the time window from July 2020 through July 2025.
+
+**Brief description:**
+
+This dataset is maintained by the U.S. Department of Transportation’s Bureau of Transportation Statistics (BTS).Airlines are required by federal regulation (14 CFR Part 234) to report monthly on-time performance for all domestic scheduled flights operated by major U.S. carriers. Data are collected directly from each airline’s operational system, verified by BTS, and aggregated at the carrier-airport-month level. Each observation represents a monthly record for a specific airline and airport in the U.S. It includes both categorical variables (e.g., carrier, airport, month, year) and numerical variables (e.g., number of flights, delay counts, and average delay minutes by cause such as weather or carrier).
+
+**Research question 1:**
+
+-   What are the primary causes of flight delays among major U.S. airlines, and how do these causes vary by season or airport?
+
+**Load the data and provide a `glimpse()`**:
+
+```{r data-1, warning=FALSE}
+library(tidyverse)
+library(lubridate)
+
+df <- read_csv("Airline_Delay_Cause.csv")
+glimpse(df)
+```
+
+```{r  }
+# Missing values per column
+df %>%
+  summarise(across(everything(), ~ sum(is.na(.)))) %>%
+  pivot_longer(everything(), names_to = "column", values_to = "na_count")
+
+# Number of unique categories for categorical variables
+df %>% summarise(
+  n_carriers = n_distinct(carrier),
+  n_airports = n_distinct(airport),
+  n_years = n_distinct(year),
+  n_months = n_distinct(month)
+)
+
+# Quick summary for key numerical columns
+df %>%
+  select(arr_flights, arr_del15, carrier_ct, weather_ct, nas_ct, security_ct, late_aircraft_ct) %>%
+  summary()
+```
+
+# 
+
+**Exploratory Plots:**
+
+```{r plots-1}
+# Delay Causes proportion
+df %>%
+  mutate(date = ymd(paste(year, month, "01"))) %>%
+  group_by(date) %>%
+  summarize(
+    carrier = sum(carrier_ct, na.rm=TRUE),
+    weather = sum(weather_ct, na.rm=TRUE),
+    nas = sum(nas_ct, na.rm=TRUE),
+    security = sum(security_ct, na.rm=TRUE),
+    late_aircraft = sum(late_aircraft_ct, na.rm=TRUE)
+  ) %>%
+  pivot_longer(-date, names_to="cause", values_to="count") %>%
+  group_by(date) %>%
+  mutate(prop = count / sum(count)) %>%
+  ggplot(aes(date, prop, fill = cause)) +
+  geom_area(alpha=0.8) +
+  labs(title = "Proportion of Delay Causes Over Time",
+       x = "Date", y = "Proportion") +
+  theme_minimal()
+
+
+```
+
+```{r}
+# Seasonal Delay Totals
+df %>%
+  mutate(season =
+           case_when(
+             month %in% c(12,1,2) ~ "Winter",
+             month %in% c(3,4,5) ~ "Spring",
+             month %in% c(6,7,8) ~ "Summer",
+             TRUE ~ "Fall"
+           )) %>%
+  group_by(season) %>%
+  summarize(total_delays = sum(arr_del15, na.rm = TRUE)) %>%
+  ggplot(aes(season, total_delays, fill = season)) +
+  geom_col(show.legend = FALSE) +
+  labs(title = "Total Delays by Season",
+       x = "Season", y = "Total Delays") +
+  theme_minimal()
+
+
+```
+
+```{r}
+# Delays by airports
+df %>%
+  group_by(airport) %>%
+  summarize(total_delays = sum(arr_del15)) %>%
+  slice_max(total_delays, n = 10) %>%
+  ggplot(aes(reorder(airport, total_delays), total_delays)) +
+  geom_col(fill = "darkblue") +
+  coord_flip() +
+  labs(title = "Top 10 Airports by Total Delays",
+       x = "Airport", y = "Total Delays") +
+  theme_minimal()
+```
